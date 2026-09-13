@@ -15,10 +15,9 @@ class HandTracker:
             base_options=BaseOptions(
                 model_asset_path=model_path
             ),
-            running_mode=VisionRunningMode.VIDEO,
-            num_hands=1,
-            min_hand_detection_confidence=0.5,
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
             min_tracking_confidence=0.5
+           
         )
 
         # Create hand detector

@@ -55,6 +55,13 @@ click_threshold = 0.05
 click_cooldown = 0.5
 
 last_click_time = 0
+last_right_click_time = 0
+
+# --------------------------------------------------
+# Drag settings
+# --------------------------------------------------
+
+dragging = False
 
 
 # --------------------------------------------------
@@ -123,6 +130,9 @@ try:
             # Landmark 4 = Thumb fingertip
             thumb_tip = hand[4]
 
+            # Landmark 12 = Middle fingertip
+            middle_tip = hand[12]
+
 
             # Normalized coordinates
             x = index_tip.x
@@ -132,6 +142,11 @@ try:
             distance = math.hypot(
                index_tip.x - thumb_tip.x,
                index_tip.y - thumb_tip.y
+            )
+
+            middle_distance = math.hypot(
+                middle_tip.x - thumb_tip.x,
+                middle_tip.y - thumb_tip.y
             )
 
 
@@ -187,19 +202,35 @@ try:
                 smooth_y
             )
 
-            # --------------------------------------------------
-            # Left click gesture
-            # --------------------------------------------------
-
             current_time = time.monotonic()
+
+            # --------------------------------------------------
+            # Drag and Drop
+            # --------------------------------------------------
 
             if distance < click_threshold:
 
-                if current_time - last_click_time > click_cooldown:
+                if not dragging:
+                    cursor.mouse_down()
+                    dragging = True
 
-                    cursor.left_click()
+            else:
 
-                    last_click_time = current_time
+                if dragging:
+                    cursor.mouse_up()
+                    dragging = False
+
+            # --------------------------------------------------
+            # Right click gesture
+            # --------------------------------------------------
+
+            if middle_distance < click_threshold:
+
+                if current_time - last_right_click_time > click_cooldown:
+
+                    cursor.right_click()
+
+                    last_right_click_time = current_time
 
 
             # --------------------------------------------------
@@ -244,6 +275,16 @@ try:
                 frame,
                 f"Pinch: {distance:.3f}",
                 (20, 110),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2
+            )
+
+            cv2.putText(
+                frame,
+                f"Middle Pinch: {middle_distance:.3f}",
+                (20, 145),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 255),

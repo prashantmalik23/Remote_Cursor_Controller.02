@@ -15,3 +15,12 @@ class CursorController:
 
     def left_click(self):
         pyautogui.click()
+
+    def right_click(self):
+        pyautogui.rightClick()
+
+    def mouse_down(self):
+        pyautogui.mouseDown()
+
+    def mouse_up(self):
+        pyautogui.mouseUp()    
