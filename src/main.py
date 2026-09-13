@@ -1,8 +1,10 @@
 import cv2
 import time
 import pyautogui
+import math
 
 from hand_tracking import HandTracker
+from cursor_controller import CursorController
 
 
 # --------------------------------------------------
@@ -17,6 +19,7 @@ MODEL_PATH = "models/hand_landmarker.task"
 # --------------------------------------------------
 
 tracker = HandTracker(MODEL_PATH)
+cursor = CursorController()
 
 
 # --------------------------------------------------
@@ -44,9 +47,18 @@ smooth_factor = 0.25
 previous_x = 0
 previous_y = 0
 
+# --------------------------------------------------
+# 6. Click settings
+# --------------------------------------------------
+
+click_threshold = 0.05
+click_cooldown = 0.5
+
+last_click_time = 0
+
 
 # --------------------------------------------------
-# 6. Camera area
+# 7. Camera area
 # --------------------------------------------------
 
 cap = cv2.VideoCapture(0)
@@ -58,7 +70,7 @@ if not cap.isOpened():
 
 
 # --------------------------------------------------
-# 7. Main loop
+# 8. Main loop
 # --------------------------------------------------
 
 try:
@@ -108,10 +120,19 @@ try:
             # Landmark 8 = Index fingertip
             index_tip = hand[8]
 
+            # Landmark 4 = Thumb fingertip
+            thumb_tip = hand[4]
+
 
             # Normalized coordinates
             x = index_tip.x
             y = index_tip.y
+
+            # Calculate distance between thumb and index finger
+            distance = math.hypot(
+               index_tip.x - thumb_tip.x,
+               index_tip.y - thumb_tip.y
+            )
 
 
             # --------------------------------------------------
@@ -166,6 +187,20 @@ try:
                 smooth_y
             )
 
+            # --------------------------------------------------
+            # Left click gesture
+            # --------------------------------------------------
+
+            current_time = time.monotonic()
+
+            if distance < click_threshold:
+
+                if current_time - last_click_time > click_cooldown:
+
+                    cursor.left_click()
+
+                    last_click_time = current_time
+
 
             # --------------------------------------------------
             # Draw fingertip
@@ -199,6 +234,16 @@ try:
                 frame,
                 f"Cursor: X={smooth_x} Y={smooth_y}",
                 (20, 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2
+            )
+
+            cv2.putText(
+                frame,
+                f"Pinch: {distance:.3f}",
+                (20, 110),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 255),
@@ -239,7 +284,7 @@ try:
 
 
 # --------------------------------------------------
-# 8. Cleanup
+# 9. Cleanup
 # --------------------------------------------------
 
 finally:
