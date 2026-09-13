@@ -1,73 +1,67 @@
 import cv2
 import time
+import pyautogui
 
 from hand_tracking import HandTracker
 
 
+# --------------------------------------------------
+# 1. Model path
+# --------------------------------------------------
+
 MODEL_PATH = "models/hand_landmarker.task"
 
 
-def draw_hand_landmarks(frame, landmarks):
-    """
-    Draw the 21 hand landmarks.
-    """
+# --------------------------------------------------
+# 2. Create HandTracker
+# --------------------------------------------------
 
-    height, width, _ = frame.shape
-
-    points = []
-
-    # Draw landmark points
-    for landmark in landmarks:
-
-        x = int(landmark.x * width)
-        y = int(landmark.y * height)
-
-        points.append((x, y))
-
-        cv2.circle(
-            frame,
-            (x, y),
-            5,
-            (0, 255, 0),
-            -1
-        )
-
-    # Connections between hand landmarks
-    connections = [
-        (0, 1), (1, 2), (2, 3), (3, 4),
-        (0, 5), (5, 6), (6, 7), (7, 8),
-        (5, 9), (9, 10), (10, 11), (11, 12),
-        (9, 13), (13, 14), (14, 15), (15, 16),
-        (13, 17), (17, 18), (18, 19), (19, 20),
-        (0, 17)
-    ]
-
-    # Draw landmark connections
-    for start, end in connections:
-
-        cv2.line(
-            frame,
-            points[start],
-            points[end],
-            (255, 255, 255),
-            2
-        )
+tracker = HandTracker(MODEL_PATH)
 
 
-def main():
+# --------------------------------------------------
+# 3. Get screen size
+# --------------------------------------------------
 
-    # Open webcam
-    cap = cv2.VideoCapture(0)
+screen_width, screen_height = pyautogui.size()
 
-    if not cap.isOpened():
-        print("Error: Cannot access webcam.")
-        return
+print(f"Screen Size: {screen_width} x {screen_height}")
 
-    # Create HandTracker object
-    tracker = HandTracker(MODEL_PATH)
 
-    print("Hand tracking started.")
-    print("Press 'q' to close.")
+# --------------------------------------------------
+# 4. PyAutoGUI settings
+# --------------------------------------------------
+
+pyautogui.PAUSE = 0
+
+
+# --------------------------------------------------
+# 5. Smoothing settings
+# --------------------------------------------------
+
+smooth_factor = 0.25
+
+previous_x = 0
+previous_y = 0
+
+
+# --------------------------------------------------
+# 6. Camera area
+# --------------------------------------------------
+
+cap = cv2.VideoCapture(0)
+
+if not cap.isOpened():
+    print("Error: Could not open webcam.")
+    tracker.close()
+    exit()
+
+
+# --------------------------------------------------
+# 7. Main loop
+# --------------------------------------------------
+
+try:
 
     while True:
 
@@ -75,11 +69,13 @@ def main():
         success, frame = cap.read()
 
         if not success:
-            print("Error: Cannot receive frame.")
+            print("Error: Could not read frame.")
             break
 
-        # Flip webcam for mirror effect
+
+        # Mirror camera
         frame = cv2.flip(frame, 1)
+
 
         # Convert BGR → RGB
         rgb_frame = cv2.cvtColor(
@@ -87,8 +83,10 @@ def main():
             cv2.COLOR_BGR2RGB
         )
 
-        # Create timestamp
-        timestamp_ms = int(time.time() * 1000)
+
+        # Timestamp
+        timestamp_ms = int(time.monotonic() * 1000)
+
 
         # Detect hand
         result = tracker.detect(
@@ -96,33 +94,156 @@ def main():
             timestamp_ms
         )
 
-        # Check whether hand exists
+
+        # --------------------------------------------------
+        # If hand detected
+        # --------------------------------------------------
+
         if result.hand_landmarks:
 
-            # Loop through detected hands
-            for hand_landmarks in result.hand_landmarks:
+            # Get first hand
+            hand = result.hand_landmarks[0]
 
-                # Draw landmarks
-                draw_hand_landmarks(
-                    frame,
-                    hand_landmarks
-                )
 
-        # Display webcam
+            # Landmark 8 = Index fingertip
+            index_tip = hand[8]
+
+
+            # Normalized coordinates
+            x = index_tip.x
+            y = index_tip.y
+
+
+            # --------------------------------------------------
+            # Camera pixel coordinates
+            # --------------------------------------------------
+
+            frame_height, frame_width, _ = frame.shape
+
+            pixel_x = int(x * frame_width)
+            pixel_y = int(y * frame_height)
+
+
+            # --------------------------------------------------
+            # Screen coordinates
+            # --------------------------------------------------
+
+            target_x = int(x * screen_width)
+            target_y = int(y * screen_height)
+
+
+            # --------------------------------------------------
+            # Smooth cursor movement
+            # --------------------------------------------------
+
+            smooth_x = (
+                previous_x
+                + (target_x - previous_x) * smooth_factor
+            )
+
+            smooth_y = (
+                previous_y
+                + (target_y - previous_y) * smooth_factor
+            )
+
+
+            # Convert to integer
+            smooth_x = int(smooth_x)
+            smooth_y = int(smooth_y)
+
+
+            # Save for next frame
+            previous_x = smooth_x
+            previous_y = smooth_y
+
+
+            # --------------------------------------------------
+            # Move actual mouse cursor
+            # --------------------------------------------------
+
+            pyautogui.moveTo(
+                smooth_x,
+                smooth_y
+            )
+
+
+            # --------------------------------------------------
+            # Draw fingertip
+            # --------------------------------------------------
+
+            cv2.circle(
+                frame,
+                (pixel_x, pixel_y),
+                10,
+                (0, 255, 255),
+                -1
+            )
+
+
+            # --------------------------------------------------
+            # Display coordinates
+            # --------------------------------------------------
+
+            cv2.putText(
+                frame,
+                f"Index: X={x:.3f} Y={y:.3f}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2
+            )
+
+
+            cv2.putText(
+                frame,
+                f"Cursor: X={smooth_x} Y={smooth_y}",
+                (20, 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2
+            )
+
+
+        else:
+
+            # No hand detected
+            cv2.putText(
+                frame,
+                "No hand detected",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2
+            )
+
+
+        # --------------------------------------------------
+        # Show camera
+        # --------------------------------------------------
+
         cv2.imshow(
             "Remote Cursor Controller",
             frame
         )
 
-        # Press q to quit
+
+        # --------------------------------------------------
+        # Press Q to exit
+        # --------------------------------------------------
+
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-    # Release resources
-    tracker.close()
+
+# --------------------------------------------------
+# 8. Cleanup
+# --------------------------------------------------
+
+finally:
+
     cap.release()
     cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+    tracker.close()
